@@ -32,7 +32,8 @@ const ORDERLY_LEDGER_CONTRACT_L2 = '0x1826B75e2ef249173FC735149AE4B8e9ea10abff';
 
 // Chain IDs
 const ARB_SEPOLIA_CHAIN_ID = 421614;
-const ORDERLY_L2_CHAIN_ID = 291;
+// Orderly Sepolia Testnet Chain ID (L2) - Required for EIP-712 Signing on Testnet
+const ORDERLY_L2_CHAIN_ID = 4460;
 
 // Broker
 const BROKER_ID = 'woofi_pro';
@@ -272,10 +273,11 @@ async function withdrawUSDC(api, wallet, amount, accountId, orderlyKey, orderlyS
     const amountWei = ethers.parseUnits(amount.toString(), 6).toString();
 
     // IMPORTANT: Withdrawals use Orderly L2 Ledger contract as verifying contract
+    // On Testnet, this is Chain ID 4460 (Orderly Sepolia)
     const domain = {
         name: 'Orderly',
         version: '1',
-        chainId: ORDERLY_L2_CHAIN_ID, // 291
+        chainId: ORDERLY_L2_CHAIN_ID, // 4460
         verifyingContract: ORDERLY_LEDGER_CONTRACT_L2
     };
 
@@ -303,23 +305,37 @@ async function withdrawUSDC(api, wallet, amount, accountId, orderlyKey, orderlyS
 
     const signature = await wallet.signTypedData(domain, types, withdrawMessage);
 
+    // Debug logging
+    console.log(`[DEBUG] Signing Withdraw:`);
+    console.log(`  Domain:`, domain);
+    console.log(`  Message:`, withdrawMessage);
+    console.log(`  Signature:`, signature.slice(0, 20) + '...');
+
     const path = '/v1/withdraw_request';
     const body = {
         message: withdrawMessage,
         signature: signature,
         userAddress: wallet.address,
-        verifyingContract: ORDERLY_LEDGER_CONTRACT_L2 // Send the contract address used for verification
+        verifyingContract: ORDERLY_LEDGER_CONTRACT_L2
     };
 
     const headers = createAuthHeaders(orderlyKey, orderlySecret, accountId, 'POST', path, body);
 
     try {
-        await api.post(path, body, { headers });
+        const res = await api.post(path, body, { headers });
+
+        // Debug logging for success
+        console.log(`[DEBUG] Withdraw Success Response:`, JSON.stringify(res.data));
+
         return true;
     } catch (err) {
-        // Log detailed error if possible
+        // Log detailed error
+        console.error(`[ERROR] Withdrawal Failed:`);
         if (err.response) {
-            console.error(`Withdrawal Error details:`, err.response.data);
+            console.error(`  Status:`, err.response.status);
+            console.error(`  Data:`, JSON.stringify(err.response.data));
+        } else {
+            console.error(`  Message:`, err.message);
         }
         return false;
     }
