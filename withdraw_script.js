@@ -43,7 +43,7 @@ const MIN_INDEX = 0;
 const MAX_INDEX = 300;
 
 // PARALLEL PROCESSING CONFIG
-const CONCURRENCY = 20; // Number of wallets to process simultaneously (increased for speed)
+const CONCURRENCY = 5; // Reduced concurrency for debugging stability
 
 // Target address
 const TARGET_ADDRESS = process.env.FUNDER_PRIVATE_KEY
@@ -92,6 +92,9 @@ async function getAccountFromAPI(api, userAddress) {
         }
         return null;
     } catch (err) {
+        if (err.response && err.response.status !== 404) {
+             // console.error(`[DEBUG] getAccountFromAPI error for ${userAddress}:`, err.message);
+        }
         return null;
     }
 }
@@ -141,6 +144,7 @@ async function registerAccount(api, wallet) {
         if (err.response?.data?.message?.includes('already')) {
             return true;
         }
+        console.error(`[DEBUG] Registration failed for ${wallet.address}:`, err.message);
         return false;
     }
 }
@@ -191,6 +195,9 @@ async function addOrderlyKey(api, wallet) {
         });
         return { orderlyKey, orderlySecret };
     } catch (err) {
+        console.error(`[DEBUG] Add Orderly Key failed for ${wallet.address}:`);
+        if (err.response) console.error(JSON.stringify(err.response.data));
+        else console.error(err.message);
         return null;
     }
 }
@@ -230,13 +237,24 @@ async function getUSDCBalance(api, orderlyKey, orderlySecret, accountId) {
             const res = await api.get(path, { headers });
             if (res.data.success && res.data.data?.holding) {
                 const usdc = res.data.data.holding.find(h => h.token === 'USDC');
-                return usdc ? parseFloat(usdc.holding) : 0;
+                const bal = usdc ? parseFloat(usdc.holding) : 0;
+                // Debug log for positive balance
+                if (bal > 0) {
+                    console.log(`[DEBUG] Balance Check: Found ${bal} USDC for Account ${accountId}`);
+                }
+                return bal;
+            } else {
+                console.log(`[DEBUG] Balance Check: No data or success=false for Account ${accountId}`, res.data);
             }
             return 0;
         } catch (err) {
             const errMsg = err.response?.data?.message || err.message;
+            // Only warn on final attempt
+            if (attempt === 3) {
+                 console.warn(`[WARN] Balance check failed for ${accountId}: ${errMsg}`);
+            }
             if (errMsg.includes('orderly key error') && attempt < 3) {
-                await delay(1500);
+                await delay(2000); // Increased delay
                 continue;
             }
             return 0;
@@ -256,6 +274,7 @@ async function getWithdrawNonce(api, orderlyKey, orderlySecret, accountId) {
         const res = await api.get(path, { headers });
         return res.data.data.withdraw_nonce;
     } catch (err) {
+        console.error(`[DEBUG] Failed to get withdraw nonce:`, err.message);
         return null;
     }
 }
@@ -306,10 +325,9 @@ async function withdrawUSDC(api, wallet, amount, accountId, orderlyKey, orderlyS
     const signature = await wallet.signTypedData(domain, types, withdrawMessage);
 
     // Debug logging
-    console.log(`[DEBUG] Signing Withdraw:`);
-    console.log(`  Domain:`, domain);
-    console.log(`  Message:`, withdrawMessage);
-    console.log(`  Signature:`, signature.slice(0, 20) + '...');
+    console.log(`[DEBUG] Signing Withdraw for ${wallet.address}:`);
+    console.log(`  Domain ChainID: ${domain.chainId}, VerifyingContract: ${domain.verifyingContract}`);
+    console.log(`  Message ChainID: ${withdrawMessage.chainId}, Token: ${withdrawMessage.token}, Amount: ${withdrawMessage.amount}`);
 
     const path = '/v1/withdraw_request';
     const body = {
@@ -323,14 +341,10 @@ async function withdrawUSDC(api, wallet, amount, accountId, orderlyKey, orderlyS
 
     try {
         const res = await api.post(path, body, { headers });
-
-        // Debug logging for success
-        console.log(`[DEBUG] Withdraw Success Response:`, JSON.stringify(res.data));
-
+        console.log(`[DEBUG] Withdraw Success:`, JSON.stringify(res.data));
         return true;
     } catch (err) {
-        // Log detailed error
-        console.error(`[ERROR] Withdrawal Failed:`);
+        console.error(`[ERROR] Withdrawal Failed for ${wallet.address}:`);
         if (err.response) {
             console.error(`  Status:`, err.response.status);
             console.error(`  Data:`, JSON.stringify(err.response.data));
@@ -357,10 +371,12 @@ async function processWallet(wallet, seedIdx, walletIdx) {
 
         if (!accountData || !accountData.account_id) {
             // No account = no USDC, skip immediately
+            // Silently skip to reduce noise
             return null;
         }
 
         const accountId = accountData.account_id;
+        console.log(`${prefix} Found Account ID: ${accountId}`);
 
         // Step 2: Add Orderly key (required to check balance)
         const keyData = await addOrderlyKey(api, wallet);
@@ -370,8 +386,8 @@ async function processWallet(wallet, seedIdx, walletIdx) {
 
         const { orderlyKey, orderlySecret } = keyData;
 
-        // Step 3: Reduced delay for key propagation (was 2000, now 500)
-        await delay(500);
+        // Step 3: Increased delay for key propagation (was 500, now 2000)
+        await delay(2000);
 
         // Step 4: Check balance
         const balance = await getUSDCBalance(api, orderlyKey, orderlySecret, accountId);
@@ -444,7 +460,7 @@ async function processInParallel(wallets, seedIdx) {
 async function main() {
     console.log('');
     log('═'.repeat(60));
-    log('   WooFi/Orderly USDC Withdrawal Script V2 (PARALLEL)');
+    log('   WooFi/Orderly USDC Withdrawal Script V2 (PARALLEL - DEBUG MODE)');
     log('═'.repeat(60));
     console.log('');
 
