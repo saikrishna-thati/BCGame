@@ -43,7 +43,7 @@ const MIN_INDEX = 0;
 const MAX_INDEX = 300;
 
 // PARALLEL PROCESSING CONFIG
-const CONCURRENCY = 5; // Reduced concurrency for debugging stability
+const CONCURRENCY = 1; // Set to 1 for maximum stability and to avoid 429s during debugging
 
 // Target address
 const TARGET_ADDRESS = process.env.FUNDER_PRIVATE_KEY
@@ -82,19 +82,40 @@ function createApiClient() {
 }
 
 /**
+ * Helper: API Request with Retry for 429s
+ */
+async function apiRequestWithRetry(apiCall, maxRetries = 5) {
+    let attempt = 0;
+    while (attempt < maxRetries) {
+        try {
+            return await apiCall();
+        } catch (err) {
+            if (err.response && err.response.status === 429) {
+                attempt++;
+                const backoff = 2000 * Math.pow(2, attempt); // 4s, 8s, 16s...
+                // console.log(`[WARN] 429 Too Many Requests. Retrying in ${backoff}ms (Attempt ${attempt}/${maxRetries})`);
+                await delay(backoff);
+            } else {
+                throw err;
+            }
+        }
+    }
+    throw new Error('Max retries exceeded for API request');
+}
+
+/**
  * Get account from API
  */
 async function getAccountFromAPI(api, userAddress) {
     try {
-        const res = await api.get(`/v1/get_account?address=${userAddress}&broker_id=${BROKER_ID}`);
+        const res = await apiRequestWithRetry(() =>
+            api.get(`/v1/get_account?address=${userAddress}&broker_id=${BROKER_ID}`)
+        );
         if (res.data.success && res.data.data) {
             return res.data.data;
         }
         return null;
     } catch (err) {
-        if (err.response && err.response.status !== 404) {
-             // console.error(`[DEBUG] getAccountFromAPI error for ${userAddress}:`, err.message);
-        }
         return null;
     }
 }
@@ -104,7 +125,7 @@ async function getAccountFromAPI(api, userAddress) {
  */
 async function registerAccount(api, wallet) {
     try {
-        const nonceRes = await api.get('/v1/registration_nonce');
+        const nonceRes = await apiRequestWithRetry(() => api.get('/v1/registration_nonce'));
         const registrationNonce = nonceRes.data.data.registration_nonce;
 
         const domain = {
@@ -133,11 +154,11 @@ async function registerAccount(api, wallet) {
 
         const signature = await wallet.signTypedData(domain, types, message);
 
-        await api.post('/v1/register_account', {
+        await apiRequestWithRetry(() => api.post('/v1/register_account', {
             message,
             signature,
             userAddress: wallet.address
-        });
+        }));
 
         return true;
     } catch (err) {
@@ -188,16 +209,16 @@ async function addOrderlyKey(api, wallet) {
     const signature = await wallet.signTypedData(domain, types, message);
 
     try {
-        await api.post('/v1/orderly_key', {
+        await apiRequestWithRetry(() => api.post('/v1/orderly_key', {
             message,
             signature,
             userAddress: wallet.address
-        });
+        }));
         return { orderlyKey, orderlySecret };
     } catch (err) {
-        console.error(`[DEBUG] Add Orderly Key failed for ${wallet.address}:`);
-        if (err.response) console.error(JSON.stringify(err.response.data));
-        else console.error(err.message);
+        // console.error(`[DEBUG] Add Orderly Key failed for ${wallet.address}:`);
+        // if (err.response) console.error(JSON.stringify(err.response.data));
+        // else console.error(err.message);
         return null;
     }
 }
@@ -234,27 +255,20 @@ async function getUSDCBalance(api, orderlyKey, orderlySecret, accountId) {
         const headers = createAuthHeaders(orderlyKey, orderlySecret, accountId, 'GET', path);
 
         try {
-            const res = await api.get(path, { headers });
+            const res = await apiRequestWithRetry(() => api.get(path, { headers }));
             if (res.data.success && res.data.data?.holding) {
                 const usdc = res.data.data.holding.find(h => h.token === 'USDC');
                 const bal = usdc ? parseFloat(usdc.holding) : 0;
-                // Debug log for positive balance
                 if (bal > 0) {
-                    console.log(`[DEBUG] Balance Check: Found ${bal} USDC for Account ${accountId}`);
+                    console.log(`[DEBUG] Found ${bal} USDC for Account ${accountId}`);
                 }
                 return bal;
-            } else {
-                console.log(`[DEBUG] Balance Check: No data or success=false for Account ${accountId}`, res.data);
             }
             return 0;
         } catch (err) {
             const errMsg = err.response?.data?.message || err.message;
-            // Only warn on final attempt
-            if (attempt === 3) {
-                 console.warn(`[WARN] Balance check failed for ${accountId}: ${errMsg}`);
-            }
             if (errMsg.includes('orderly key error') && attempt < 3) {
-                await delay(2000); // Increased delay
+                await delay(2000);
                 continue;
             }
             return 0;
@@ -271,16 +285,15 @@ async function getWithdrawNonce(api, orderlyKey, orderlySecret, accountId) {
     const headers = createAuthHeaders(orderlyKey, orderlySecret, accountId, 'GET', path);
 
     try {
-        const res = await api.get(path, { headers });
+        const res = await apiRequestWithRetry(() => api.get(path, { headers }));
         return res.data.data.withdraw_nonce;
     } catch (err) {
-        console.error(`[DEBUG] Failed to get withdraw nonce:`, err.message);
         return null;
     }
 }
 
 /**
- * Withdraw USDC
+ * Withdraw USDC with Fallback Domain Strategy
  */
 async function withdrawUSDC(api, wallet, amount, accountId, orderlyKey, orderlySecret, receiverAddress) {
     const withdrawNonce = await getWithdrawNonce(api, orderlyKey, orderlySecret, accountId);
@@ -291,15 +304,7 @@ async function withdrawUSDC(api, wallet, amount, accountId, orderlyKey, orderlyS
     const timestamp = Date.now();
     const amountWei = ethers.parseUnits(amount.toString(), 6).toString();
 
-    // IMPORTANT: Withdrawals use Orderly L2 Ledger contract as verifying contract
-    // On Testnet, this is Chain ID 4460 (Orderly Sepolia)
-    const domain = {
-        name: 'Orderly',
-        version: '1',
-        chainId: ORDERLY_L2_CHAIN_ID, // 4460
-        verifyingContract: ORDERLY_LEDGER_CONTRACT_L2
-    };
-
+    // Types definition is constant
     const types = {
         Withdraw: [
             { name: 'brokerId', type: 'string' },
@@ -312,6 +317,7 @@ async function withdrawUSDC(api, wallet, amount, accountId, orderlyKey, orderlyS
         ]
     };
 
+    // Message payload is constant
     const withdrawMessage = {
         brokerId: BROKER_ID,
         chainId: ARB_SEPOLIA_CHAIN_ID, // Destination Chain ID
@@ -322,37 +328,70 @@ async function withdrawUSDC(api, wallet, amount, accountId, orderlyKey, orderlyS
         timestamp: timestamp
     };
 
-    const signature = await wallet.signTypedData(domain, types, withdrawMessage);
-
-    // Debug logging
-    console.log(`[DEBUG] Signing Withdraw for ${wallet.address}:`);
-    console.log(`  Domain ChainID: ${domain.chainId}, VerifyingContract: ${domain.verifyingContract}`);
-    console.log(`  Message ChainID: ${withdrawMessage.chainId}, Token: ${withdrawMessage.token}, Amount: ${withdrawMessage.amount}`);
-
-    const path = '/v1/withdraw_request';
-    const body = {
-        message: withdrawMessage,
-        signature: signature,
-        userAddress: wallet.address,
+    // STRATEGY 1: Orderly Sepolia Chain ID (4460) + L2 Ledger
+    const domain1 = {
+        name: 'Orderly',
+        version: '1',
+        chainId: ORDERLY_L2_CHAIN_ID, // 4460
         verifyingContract: ORDERLY_LEDGER_CONTRACT_L2
     };
 
-    const headers = createAuthHeaders(orderlyKey, orderlySecret, accountId, 'POST', path, body);
+    // STRATEGY 2: Fallback - Maybe 291? (Some docs say 291)
+    const domain2 = {
+        name: 'Orderly',
+        version: '1',
+        chainId: 291,
+        verifyingContract: ORDERLY_LEDGER_CONTRACT_L2
+    };
 
-    try {
-        const res = await api.post(path, body, { headers });
-        console.log(`[DEBUG] Withdraw Success:`, JSON.stringify(res.data));
-        return true;
-    } catch (err) {
-        console.error(`[ERROR] Withdrawal Failed for ${wallet.address}:`);
-        if (err.response) {
-            console.error(`  Status:`, err.response.status);
-            console.error(`  Data:`, JSON.stringify(err.response.data));
-        } else {
-            console.error(`  Message:`, err.message);
+    // STRATEGY 3: Fallback - Arb Sepolia Chain ID (421614) + L2 Ledger
+    const domain3 = {
+        name: 'Orderly',
+        version: '1',
+        chainId: ARB_SEPOLIA_CHAIN_ID,
+        verifyingContract: ORDERLY_LEDGER_CONTRACT_L2
+    };
+
+    const attempts = [
+        { name: 'Strategy 1 (ID 4460)', domain: domain1 },
+        { name: 'Strategy 2 (ID 291)', domain: domain2 },
+        { name: 'Strategy 3 (ID 421614)', domain: domain3 }
+    ];
+
+    for (const attempt of attempts) {
+        // console.log(`[DEBUG] Trying Withdrawal ${attempt.name}...`);
+
+        try {
+            const signature = await wallet.signTypedData(attempt.domain, types, withdrawMessage);
+
+            const path = '/v1/withdraw_request';
+            const body = {
+                message: withdrawMessage,
+                signature: signature,
+                userAddress: wallet.address,
+                verifyingContract: ORDERLY_LEDGER_CONTRACT_L2
+            };
+
+            const headers = createAuthHeaders(orderlyKey, orderlySecret, accountId, 'POST', path, body);
+
+            const res = await apiRequestWithRetry(() => api.post(path, body, { headers }));
+
+            if (res.data.success) {
+                console.log(`[DEBUG] Withdraw Success using ${attempt.name}`);
+                return true;
+            } else {
+                console.log(`[DEBUG] Failed ${attempt.name}: ${res.data.message}`);
+                // If it's a signature error, try next strategy. If it's balance/nonce, stop.
+                if (!res.data.message.includes("signature")) {
+                    return false;
+                }
+            }
+        } catch (err) {
+            console.error(`[DEBUG] Error in ${attempt.name}:`, err.response ? err.response.data : err.message);
         }
-        return false;
     }
+
+    return false;
 }
 
 /**
@@ -370,13 +409,10 @@ async function processWallet(wallet, seedIdx, walletIdx) {
         const accountData = await getAccountFromAPI(api, address);
 
         if (!accountData || !accountData.account_id) {
-            // No account = no USDC, skip immediately
-            // Silently skip to reduce noise
             return null;
         }
 
         const accountId = accountData.account_id;
-        console.log(`${prefix} Found Account ID: ${accountId}`);
 
         // Step 2: Add Orderly key (required to check balance)
         const keyData = await addOrderlyKey(api, wallet);
@@ -386,7 +422,7 @@ async function processWallet(wallet, seedIdx, walletIdx) {
 
         const { orderlyKey, orderlySecret } = keyData;
 
-        // Step 3: Increased delay for key propagation (was 500, now 2000)
+        // Step 3: Increased delay for key propagation
         await delay(2000);
 
         // Step 4: Check balance
@@ -460,7 +496,7 @@ async function processInParallel(wallets, seedIdx) {
 async function main() {
     console.log('');
     log('═'.repeat(60));
-    log('   WooFi/Orderly USDC Withdrawal Script V2 (PARALLEL - DEBUG MODE)');
+    log('   WooFi/Orderly USDC Withdrawal Script V2 (PARALLEL - ROBUST MODE)');
     log('═'.repeat(60));
     console.log('');
 
