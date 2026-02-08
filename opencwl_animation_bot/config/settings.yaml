@@ -1,0 +1,24 @@
+project_name: "OpenClaw Kids Animation Bot"
+version: "1.0.0"
+
+output_dir: "assets/output"
+character_profiles_path: "assets/characters/profiles.json"
+scene_templates_path: "assets/scenes/templates.json"
+
+animation:
+  resolution: "2560x810"
+  fps: 24
+  default_engine: "blender"
+  max_concurrent_renders: 4
+
+openclaw:
+  agent_name: "DirectorBot"
+  skills_path: "src/skills"
+
+telegram:
+  api_token: "YOUR_TELEGRAM_BOT_TOKEN"
+  admin_ids: [123456789]
+
+logging:
+  level: "INFO"
+  file: "bot.log"

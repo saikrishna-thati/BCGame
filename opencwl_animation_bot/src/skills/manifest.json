@@ -1,0 +1,23 @@
+{
+  "name": "openclaw-kids-animation-v1",
+  "description": "Generates 15+ minute cinematic animated videos for kids based on a topic.",
+  "version": "1.0.0",
+  "author": "OpenClaw Team",
+  "license": "MIT",
+  "capabilities": [
+    "video_generation",
+    "animation",
+    "script_writing"
+  ],
+  "requirements": [
+    "blender>=3.6",
+    "ffmpeg",
+    "python>=3.10"
+  ],
+  "entry_point": "src.skills.animation_skill:AnimationSkill",
+  "config_schema": {
+    "output_dir": "string",
+    "resolution": "string",
+    "fps": "integer"
+  }
+}
