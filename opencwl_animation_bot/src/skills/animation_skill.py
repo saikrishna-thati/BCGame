@@ -1,10 +1,12 @@
 import asyncio
 import logging
+import uuid
 from typing import Dict, Any, List
 
-from src.core.skill_interface import OpenClawSkill
-# In a real implementation, we would import the orchestrator here
-# from src.animation.orchestrator import AnimationOrchestrator
+from src.core.skill_interface import OpenClawSkill, SkillManifest
+from src.core.utils import sanitize_filename
+from src.animation.orchestrator import AnimationOrchestrator
+from src.characters.manager import CharacterManager
 
 logger = logging.getLogger(__name__)
 
@@ -24,71 +26,67 @@ class AnimationSkill(OpenClawSkill):
         """Configure the skill and initialize the animation orchestrator."""
         super().configure(config)
         logger.info("Configuring AnimationSkill with: %s", config)
-        # self.orchestrator = AnimationOrchestrator(config)
+
+        # Initialize dependencies
+        char_manager = CharacterManager()
+        # In a real app, we might load profiles here
+        # char_manager.load_profiles_from_file(config.get('character_profiles_path'))
+
+        self.orchestrator = AnimationOrchestrator(config.get('animation', {}), char_manager)
 
     async def execute(self, context: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Execute the animation generation process.
-
-        Expected context:
-        - topic: str (The theme of the video)
-        - duration: int (Target duration in seconds, default 900)
-        - style: str (Animation style, default 'cinematic_kids')
+        Execute the animation generation process with job tracing.
         """
+        job_id = str(uuid.uuid4())[:8]
         topic = context.get('topic', 'A fun learning adventure')
         duration = context.get('duration', 900)
 
-        logger.info(f"Starting animation generation for topic: {topic}, duration: {duration}s")
-
-        # Simulate the orchestration process
-        # In reality, this would call self.orchestrator.generate_video(topic, duration)
+        safe_topic = sanitize_filename(topic)
+        logger.info(f"[Job {job_id}] Starting animation generation for topic: {topic} (safe: {safe_topic})")
 
         try:
             # Step 1: Generate Script (Simulated)
             script = await self._generate_script(topic)
 
-            # Step 2: Plan Scenes
-            scenes = await self._plan_scenes(script)
+            # Step 2: Use Orchestrator to generate video
+            output_path = f"assets/output/{safe_topic}_final.mp4"
+            final_video_path = await self.orchestrator.generate_video(script, output_path, job_id=job_id)
 
-            # Step 3: Render (Simulated)
-            # await self.orchestrator.render_scenes(scenes)
-
-            logger.info("Animation generation completed successfully.")
+            logger.info(f"[Job {job_id}] Animation generation completed successfully.")
             return {
                 "status": "success",
-                "video_path": "assets/output/final_video.mp4",
+                "job_id": job_id,
+                "video_path": final_video_path,
                 "metadata": {
                     "topic": topic,
-                    "duration": duration,
-                    "scene_count": len(scenes)
+                    "duration": duration
                 }
             }
 
         except Exception as e:
-            logger.error(f"Animation generation failed: {e}")
+            logger.error(f"[Job {job_id}] Animation generation failed: {e}", exc_info=True)
             return {
                 "status": "error",
+                "job_id": job_id,
                 "message": str(e)
             }
 
-    def get_manifest(self) -> Dict[str, Any]:
-        return {
-            "name": self.name,
-            "description": self.description,
-            "version": "1.0.0",
-            "capabilities": ["video_generation", "animation", "script_writing"],
-            "requirements": ["blender", "ffmpeg", "python-3.10+"]
-        }
+    def get_manifest(self) -> SkillManifest:
+        return SkillManifest(
+            name=self.name,
+            description=self.description,
+            version="1.0.0",
+            capabilities=["video_generation", "animation", "script_writing"],
+            requirements=["blender", "ffmpeg", "python-3.10+"],
+            entry_point="src.skills.animation_skill:AnimationSkill",
+            config_schema={
+                "animation": {"render_backend": "string", "resolution": "string"}
+            }
+        )
 
     async def _generate_script(self, topic: str) -> str:
         """Simulate script generation using LLM (to be implemented)."""
         logger.info(f"Generating script for: {topic}")
         await asyncio.sleep(1) # Simulate processing
         return f"Script for {topic}: Scene 1..."
-
-    async def _plan_scenes(self, script: str) -> List[Dict[str, Any]]:
-        """Simulate scene planning."""
-        logger.info("Planning scenes...")
-        await asyncio.sleep(1)
-        # Return a list of 30 mock scenes for a 15 min video (30s each)
-        return [{"id": i, "duration": 30} for i in range(30)]

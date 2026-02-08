@@ -40,11 +40,18 @@ async def main():
     anim_skill = AnimationSkill()
     registry.register(anim_skill)
 
-    # Configure Skill (mock config)
+    # Configure Skill (mock config matching settings.yaml structure)
     config = {
         "output_dir": "assets/output",
-        "resolution": "2560x810",
-        "fps": 24
+        "character_profiles_path": "assets/characters/profiles.json",
+        "animation": {
+            "resolution": "2560x810",
+            "fps": 24,
+            "render_backend": "local",
+            "backend_config": {
+                "max_concurrent_renders": 2
+            }
+        }
     }
     anim_skill.configure(config)
 

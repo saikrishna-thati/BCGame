@@ -1,5 +1,20 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
+from pydantic import BaseModel, Field
+
+class SkillManifest(BaseModel):
+    """
+    Standardized manifest for an OpenClaw Skill.
+    """
+    name: str
+    description: str
+    version: str = "1.0.0"
+    author: str = "OpenClaw Community"
+    license: str = "MIT"
+    capabilities: List[str] = Field(default_factory=list)
+    requirements: List[str] = Field(default_factory=list)
+    entry_point: str
+    config_schema: Dict[str, Any] = Field(default_factory=dict)
 
 class OpenClawSkill(ABC):
     """
@@ -30,6 +45,6 @@ class OpenClawSkill(ABC):
         pass
 
     @abstractmethod
-    def get_manifest(self) -> Dict[str, Any]:
-        """Return the skill's manifest data."""
+    def get_manifest(self) -> SkillManifest:
+        """Return the skill's manifest data as a Pydantic model."""
         pass

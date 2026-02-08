@@ -3,12 +3,14 @@ import json
 import random
 from typing import Dict, List, Optional
 from src.characters.models import CharacterProfile, StyleGuide, SceneCharacterState
+from src.core.safety import ContentSafety
 
 logger = logging.getLogger(__name__)
 
 class CharacterManager:
     """
     Manages character profiles and ensures consistency across video generation.
+    Incorporates safety checks for kid-friendly content.
     """
 
     def __init__(self, style_guide: Optional[StyleGuide] = None):
@@ -35,6 +37,7 @@ class CharacterManager:
         """
         Construct a Stable Diffusion prompt for a specific character in a scene.
         Combines global style, character fixed traits, and scene-specific actions.
+        Applies safety filtering.
         """
         char = self.profiles.get(scene_state.character_name)
         if not char:
@@ -55,7 +58,16 @@ class CharacterManager:
         # 4. Action & Emotion
         prompt_parts.append(f"{scene_state.emotion} expression, {scene_state.action}")
 
-        return ", ".join(prompt_parts)
+        # Final Prompt Assembly
+        full_prompt = ", ".join(prompt_parts)
+
+        # Safety Check
+        is_safe, found = ContentSafety.check_prompt(full_prompt)
+        if not is_safe:
+            full_prompt = ContentSafety.sanitize_prompt(full_prompt)
+            logger.warning(f"Sanitized unsafe prompt for {char.name}: {found}")
+
+        return full_prompt
 
     def get_negative_prompt(self, character_name: str) -> str:
         """Get the negative prompt for a character generation."""
@@ -64,6 +76,13 @@ class CharacterManager:
         if char:
             neg_parts.extend(char.negative_prompt_tags)
         return ", ".join(neg_parts)
+
+    def get_reference_image(self, character_name: str) -> Optional[str]:
+        """Get the path to the reference image for consistency checks."""
+        char = self.profiles.get(character_name)
+        if char:
+            return char.reference_image_path
+        return None
 
     def get_seed(self, character_name: str, scene_id: str) -> int:
         """

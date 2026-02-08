@@ -6,10 +6,14 @@ character_profiles_path: "assets/characters/profiles.json"
 scene_templates_path: "assets/scenes/templates.json"
 
 animation:
+  render_backend: "local" # Options: "local", "modal"
+  backend_config:
+    max_concurrent_renders: 2 # Lower concurrency for laptops
+    gpu_enabled: false
+
   resolution: "2560x810"
   fps: 24
   default_engine: "blender"
-  max_concurrent_renders: 4
 
 openclaw:
   agent_name: "DirectorBot"

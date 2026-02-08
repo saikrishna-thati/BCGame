@@ -14,10 +14,12 @@ class StyleGuide(BaseModel):
 class CharacterProfile(BaseModel):
     """
     Profile for a specific character.
+    Includes consistency aids like 'reference_image_path'.
     """
     name: str
     description: str
     base_image_path: Optional[str] = None
+    reference_image_path: Optional[str] = None # New for Round 2 consistency
     fixed_prompt_tags: List[str] = Field(default_factory=list)
     negative_prompt_tags: List[str] = Field(default_factory=list)
     seed: int
